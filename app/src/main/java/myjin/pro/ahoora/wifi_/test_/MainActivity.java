@@ -1,267 +1,150 @@
 package myjin.pro.ahoora.wifi_.test_;
 
-import java.io.File;
-
-import android.net.wifi.p2p.WifiP2pManager;
-import android.net.wifi.p2p.WifiP2pManager.Channel;
-import android.os.Bundle;
-import android.os.ResultReceiver;
+import android.Manifest;
 import android.app.Activity;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.view.Menu;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
+import android.os.Environment;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
-import android.view.WindowManager;
+import android.widget.ProgressBar;
 import android.widget.TextView;
+
+import org.apache.commons.net.ftp.FTPFile;
+
+import java.io.File;
+import java.net.ConnectException;
 
 import myjin.pro.ahoora.wifi_.R;
 
-public class MainActivity extends Activity {
-    public final int fileRequestID = 55;
-    public final int port = 7950;
+public class MainActivity extends AppCompatActivity implements FTPRequester {
 
-
-    private WifiP2pManager wifiManager;
-    private Channel wifichannel;
-    private BroadcastReceiver wifiServerReceiver;
-
-    private IntentFilter wifiServerReceiverIntentFilter;
-
-    private String path;
-    private File downloadTarget;
-
-    private Intent serverServiceIntent;
-
-    private boolean serverThreadActive;
+    //FTPClient object
+    FTPClient ftpclient = new FTPClient("192.168.43.209", "behrah136641@outlook.com", "behrah43946726", "/frc2706");
 
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
+        //Android code
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        //Block auto opening keyboard
-        this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-
-        wifiManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
-        wifichannel = wifiManager.initialize(this, getMainLooper(), null);
-        wifiServerReceiver = new WiFiServerBroadcastReceiver(wifiManager, wifichannel, this);
-
-        wifiServerReceiverIntentFilter = new IntentFilter();;
-        wifiServerReceiverIntentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
-        wifiServerReceiverIntentFilter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION);
-        wifiServerReceiverIntentFilter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION);
-        wifiServerReceiverIntentFilter.addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION);
-
-        //set status to stopped
-        TextView serverServiceStatus = findViewById(R.id.server_status_text);
-        serverServiceStatus.setText(R.string.server_stopped);
-
-        path = "/";
-        downloadTarget = new File(path);
-
-        serverServiceIntent = null;
-        serverThreadActive = false;
-
-        setServerFileTransferStatus("No File being transfered");
-
-        registerReceiver(wifiServerReceiver, wifiServerReceiverIntentFilter);
-
-/*
-        wifiManager.createGroup(wifichannel,  new WifiP2pManager.ActionListener()  {
-    	    public void onSuccess() {
-    	    	setServerFileTransferStatus("WiFi Group creation successful");
-    	    	//Group creation successful
-    	    }
-    	    public void onFailure(int reason) {
-    	    	setServerFileTransferStatus("WiFi Group creation failed");
-    	    	//Group creation failed
-    	    }
-    	});
-    	*/
-
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.activity_main, menu);
-        return true;
-    }
-
-    public void startFileBrowseActivity(View view) {
-
-        Intent clientStartIntent = new Intent(this, FileBrowser.class);
-        startActivityForResult(clientStartIntent, fileRequestID);
-        //Path returned to onActivityResult
-
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-
-        if (resultCode == Activity.RESULT_OK && requestCode == fileRequestID) {
-            //Fetch result
-            File targetDir = (File) data.getExtras().get("file");
-
-            if(targetDir.isDirectory())
-            {
-                if(targetDir.canWrite())
-                {
-                    downloadTarget = targetDir;
-                    TextView filePath = (TextView) findViewById(R.id.server_file_path);
-                    filePath.setText(targetDir.getPath());
-                    setServerFileTransferStatus("Download directory set to " + targetDir.getName());
-
-                }
-                else
-                {
-                    setServerFileTransferStatus("You do not have permission to write to " + targetDir.getName());
-                }
-
-            }
-            else
-            {
-                setServerFileTransferStatus("The selected file is not a directory. Please select a valid download directory.");
-            }
-
-        }
-    }
-
-    public void startServer(View view) {
-
-        //If server is already listening on port or transfering data, do not attempt to start server service
-        if(!serverThreadActive)
-        {
-            //Create new thread, open socket, wait for connection, and transfer file
-
-            serverServiceIntent = new Intent(this, ServerService.class);
-            serverServiceIntent.putExtra("saveLocation", downloadTarget);
-            serverServiceIntent.putExtra("port", new Integer(port));
-            serverServiceIntent.putExtra("serverResult", new ResultReceiver(null) {
-                @Override
-                protected void onReceiveResult(int resultCode, final Bundle resultData) {
-
-                    if(resultCode == port )
-                    {
-                        if (resultData == null) {
-                            //Server service has shut down. Download may or may not have completed properly.
-                            serverThreadActive = false;
-
-
-                            final TextView server_status_text = (TextView) findViewById(R.id.server_status_text);
-                            server_status_text.post(new Runnable() {
-                                public void run() {
-                                    server_status_text.setText(R.string.server_stopped);
-                                }
-                            });
-
-
-                        }
-                        else
-                        {
-                            final TextView server_file_status_text = (TextView) findViewById(R.id.server_file_transfer_status);
-
-                            server_file_status_text.post(new Runnable() {
-                                public void run() {
-                                    server_file_status_text.setText((String)resultData.get("message"));
-                                }
-                            });
-                        }
-                    }
-
-                }
-            });
-
-            serverThreadActive = true;
-            startService(serverServiceIntent);
-
-            //Set status to running
-            TextView serverServiceStatus = (TextView) findViewById(R.id.server_status_text);
-            serverServiceStatus.setText(R.string.server_running);
-
-        }
-        else
-        {
-            //Set status to already running
-            TextView serverServiceStatus = (TextView) findViewById(R.id.server_status_text);
-            serverServiceStatus.setText("The server is already running");
-
-        }
-    }
-
-    public void stopServer(View view) {
-
-
-        //stop download thread
-        if(serverServiceIntent != null)
-        {
-            stopService(serverServiceIntent);
-
-        }
-
-    }
-
-
-    public void startClientActivity(View view) {
-
-        stopServer(null);
-        Intent clientStartIntent = new Intent(this, ClientActivity.class);
-        startActivity(clientStartIntent);
-    }
-
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        //stopServer(null);
-        //unregisterReceiver(wifiServerReceiver);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
-        stopServer(null);
-
-        //stopService(serverServiceIntent);
-
-        //Unregister broadcast receiver
+        //Request for permissions
+        requestPermissions();
         try {
-            unregisterReceiver(wifiServerReceiver);
-        } catch (IllegalArgumentException e) {
-            // This will happen if the server was never running and the stop
-            // button was pressed.
-            // Do nothing in this case.
+            //Try to connect
+            ftpclient.connect();
+            if (ftpclient.isConnected()) {
+                //really do nothing because the rest is started when the button is clcked.
+
+            } else {
+                //FTPClient didn't connect.
+                Log.d("FTPClient", "Failed to connect, cannot DIR.");
+            }
+        } catch (ConnectException e) {
+            // it must have failed to connect, or something threw an error so do nothing.
         }
     }
 
+    /**
+     * place code here for when the client is done uploading a file.
+     * This is run on the background thread
+     *
+     * @param localFilename:  Local path to file
+     * @param remoteFilename: Remote path to file
+     */
+    public void uploadFileCallback(String localFilename, String remoteFilename) {
 
-
-    public void setServerWifiStatus(String message)
-    {
-        TextView server_wifi_status_text = (TextView) findViewById(R.id.server_wifi_status_text);
-        server_wifi_status_text.setText(message);
     }
 
-    public void setServerStatus(String message)
-    {
-        TextView server_status_text = (TextView) findViewById(R.id.server_status_text_2);
-        server_status_text.setText(message);
+    /**
+     * Place code here for when the client is done downloading a file.
+     * This is run on the background thread
+     *
+     * @param localFilename:  Local path to file
+     * @param remoteFilename: Remote path to file
+     */
+    public void downloadFileCallback(String localFilename, String remoteFilename) {
+
     }
 
+    /**
+     * Place code here for when the client is done syncing files.
+     * This is run on the background thread
+     *
+     * @param changedFiles: number of files uploaded and downloaded
+     */
+    public void syncCallback(int changedFiles) {
 
-    public void setServerFileTransferStatus(String message)
-    {
-        TextView server_status_text = (TextView) findViewById(R.id.server_file_transfer_status);
-        server_status_text.setText(message);
     }
 
+    /**
+     * Place code here for when the client is done getting a file listing.
+     * This is run on the background thread
+     *
+     * @param filelisting
+     */
+    public void dirCallback(FTPFile[] filelisting) {
 
+    }
+
+    /**
+     * Place code here to display progress of sync.
+     *
+     * @param Caption:  Current caption to place above sync bar
+     * @param Progress: Progress out of 100 to be displayed.
+     */
+    public void updateSyncBar(final String Caption, final int Progress, Activity activity) {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                TextView tv = findViewById(R.id.syncCaption);
+                ProgressBar pb =findViewById(R.id.syncProgressBar);
+                if (Caption.startsWith("^")) {
+                    pb.setIndeterminate(true);
+                    tv.setText("Scanning for differences...");
+                } else {
+                    pb.setIndeterminate(false);
+                    pb.setProgress(Progress);
+                    tv.setText(Caption);
+                }
+            }
+        });
+    }
+
+    /**
+     * Checks for read / write permissions, and requests them if neccesary.
+     * This function also creates neccesary folders for the FTP Library.
+     */
+    void requestPermissions() {
+        Boolean ReadStoragePerm = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        Boolean WriteStoragePerm = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        if (ReadStoragePerm && WriteStoragePerm) {
+            //We already have both permissions, so we're good.
+        } else {
+            //We need to get one of the two permissions, so we'll ask for both.
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            } else {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, 0);
+            }
+        }
+        File frc2706 = new File(Environment.getExternalStorageDirectory() + "/frc2706");
+        File files = new File(Environment.getExternalStorageDirectory() + "/frc2706/files");
+        if (!frc2706.exists()) {
+            frc2706.mkdir();
+        }
+        if (!files.exists()) {
+            files.mkdir();
+        }
+    }
+
+    void startSync(View v) {
+        try {
+            ftpclient.syncAllFiles(this, this);
+        } catch (Exception e) {
+            Log.e("FTPClient", e.toString());
+        }
+    }
 }
