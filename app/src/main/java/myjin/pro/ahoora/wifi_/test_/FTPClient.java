@@ -7,8 +7,10 @@ import android.os.AsyncTask;
 import android.os.Environment;
 import android.util.Log;
 
+import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPFile;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -55,6 +57,13 @@ public class FTPClient {
         this.localPath = new File(Environment.getExternalStorageDirectory() + localPath);
         this.remotePath = localPath;
         this.port = 21;
+
+        ftpClient.setControlEncoding("UTF-8");
+        try {
+            ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -71,6 +80,12 @@ public class FTPClient {
         this.username = username;
         this.localPath = new File(localPath);
         this.port = port;
+        ftpClient.setControlEncoding("UTF-8");
+        try {
+            ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -158,25 +173,35 @@ public class FTPClient {
                 throw new ConnectException("You cannot download a file if you're not connected!");
             }
         }
-        final File file = new File(Environment.getExternalStorageDirectory() + filename);
+        final File file = new File(localPath +"/"+ filename);
         final File folder = new File(file.getParent());
-        boolean success = true;
+
         if (!folder.exists()) {
-            success = folder.mkdir();
+           folder.mkdir();
         }
-        if (success) {
-            // Do something on success
-        } else {
-            Log.e("FTPClient", "Unable to create directorys they might already exist!");
-        }
+
         final String RemotePath = filename;
         AsyncTask.execute(new Runnable() {
             @Override
             public void run() {
                 try {
-                    OutputStream os = new FileOutputStream(file.getAbsolutePath());
-                    ftpClient.retrieveFile(RemotePath, os);
-                    requester.downloadFileCallback(file.getAbsolutePath(), RemotePath);
+
+                    OutputStream outputStream2 = new BufferedOutputStream(new FileOutputStream(file.getAbsolutePath()));
+                    InputStream inputStream = ftpClient.retrieveFileStream(RemotePath);
+                    byte[] bytesArray = new byte[4096];
+                    int bytesRead = -1;
+                    while ((bytesRead = inputStream.read(bytesArray)) != -1) {
+                        outputStream2.write(bytesArray, 0, bytesRead);
+                    }
+
+
+                    if (ftpClient.completePendingCommand()) {
+                       requester.downloadFileCallback(file.getAbsolutePath(),RemotePath);
+                    }
+                    outputStream2.close();
+                    inputStream.close();
+
+
                 }catch(Exception e){
                     Log.e("FTPClient|downloadFile", e.toString());
                     return;
@@ -240,8 +265,8 @@ public class FTPClient {
                 int maxDownProgress = 0;
                 ArrayList<String> localNames;
                 ArrayList<String> remoteNames;
-                ArrayList<String> filesToUpload = new ArrayList<String>();
-                ArrayList<String> filesToDownload = new ArrayList<String>();
+                ArrayList<String> filesToUpload = new ArrayList<>();
+                ArrayList<String> filesToDownload = new ArrayList<>();
                 int changed = 0;
                 int Uploaded = 0;
                 int Downloaded = 0;

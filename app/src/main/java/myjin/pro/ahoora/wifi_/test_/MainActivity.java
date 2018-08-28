@@ -12,6 +12,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.apache.commons.net.ftp.FTPFile;
 
@@ -23,7 +24,7 @@ import myjin.pro.ahoora.wifi_.R;
 public class MainActivity extends AppCompatActivity implements FTPRequester {
 
     //FTPClient object
-    FTPClient ftpclient = new FTPClient("192.168.43.209", "behrah136641@outlook.com", "behrah43946726", "/frc2706");
+    FTPClient ftpclient = new FTPClient("192.168.1.79", "behrah136641@outlook.com", "behrah43946726", "/frc2706");
 
 
     @Override
@@ -68,6 +69,7 @@ public class MainActivity extends AppCompatActivity implements FTPRequester {
      */
     public void downloadFileCallback(String localFilename, String remoteFilename) {
 
+        Log.e("downloadFile",localFilename+"***"+remoteFilename);
     }
 
     /**
@@ -142,7 +144,7 @@ public class MainActivity extends AppCompatActivity implements FTPRequester {
 
     void startSync(View v) {
         try {
-            ftpclient.syncAllFiles(this, this);
+            ftpclient.downloadFile("song.mp3",this);
         } catch (Exception e) {
             Log.e("FTPClient", e.toString());
         }
